@@ -1,21 +1,23 @@
 "use client";
 
-import type React from "react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { X, ArrowUp, ArrowDown } from "lucide-react";
+import { Socket } from "socket.io-client";
 
 interface TerminalProps {
   prompt?: string;
   welcomeMessage?: string;
   theme?: "dark" | "light" | "matrix" | "retro";
   className?: string;
+  socket: Socket;
 }
 
 interface CommandOutput {
   id: number;
   command: string;
   output: React.ReactNode;
+  isPending?: boolean;
 }
 
 export default function Terminal({
@@ -23,6 +25,7 @@ export default function Terminal({
   welcomeMessage = "Welcome to the terminal. Type 'help' for a list of commands.",
   theme = "dark",
   className,
+  socket,
 }: TerminalProps) {
   const [input, setInput] = useState("");
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -32,7 +35,6 @@ export default function Terminal({
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Theme styles
   const themeStyles = {
     dark: {
       bg: "bg-gray-900",
@@ -74,8 +76,8 @@ export default function Terminal({
 
   const currentTheme = themeStyles[theme];
 
-  // Available commands
-  const commands = {
+  // Available local commands
+  const localCommands = {
     help: () => (
       <div className="pl-4">
         <p>Available commands:</p>
@@ -95,17 +97,6 @@ export default function Terminal({
       setCommandOutputs([]);
       return null;
     },
-    echo: (args: string[]) => <p>{args.join(" ")}</p>,
-    date: () => <p>{new Date().toString()}</p>,
-    whoami: () => <p>guest</p>,
-    ls: () => (
-      <div>
-        <p className="text-blue-400">documents</p>
-        <p className="text-blue-400">downloads</p>
-        <p className="text-green-400">example.txt</p>
-        <p className="text-green-400">readme.md</p>
-      </div>
-    ),
     theme: (args: string[]) => {
       const newTheme = args[0] as "dark" | "light" | "matrix" | "retro";
       if (["dark", "light", "matrix", "retro"].includes(newTheme)) {
@@ -129,65 +120,34 @@ export default function Terminal({
     ),
   };
 
-  // Auto-scroll to bottom when new commands are added
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [commandOutputs]);
 
-  // Focus input on mount and when clicking terminal
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const handleTerminalClick = () => {
-    inputRef.current?.focus();
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Handle up arrow for history navigation
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (historyIndex < commandHistory.length - 1) {
-        const newIndex = historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
-      }
-    }
-    // Handle down arrow for history navigation
-    else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setInput("");
-      }
-    }
-    // Handle Enter to execute command
-    else if (e.key === "Enter") {
-      executeCommand();
-    }
-    // Handle tab completion (simple version)
-    else if (e.key === "Tab") {
-      e.preventDefault();
-      const availableCommands = Object.keys(commands);
-      const matchingCommands = availableCommands.filter((cmd) =>
-        cmd.startsWith(input)
+  useEffect(() => {
+    if (!socket) return;
+    const handleCommandOutput = (data: any) => {
+      setCommandOutputs((prev) =>
+        prev.map((item) =>
+          item.isPending
+            ? { ...item, output: <p>{data}</p>, isPending: false }
+            : item
+        )
       );
+    };
 
-      if (matchingCommands.length === 1) {
-        setInput(matchingCommands[0] + " ");
-      }
-    }
-  };
+    socket.on("commandOutput", handleCommandOutput);
+
+    return () => {
+      socket.off("commandOutput", handleCommandOutput);
+    };
+  }, [socket]);
 
   const executeCommand = () => {
     if (!input.trim()) return;
@@ -198,21 +158,12 @@ export default function Terminal({
 
     // Parse command and arguments
     const [cmd, ...args] = input.trim().split(" ");
-    const commandFn = commands[cmd as keyof typeof commands];
 
-    // Execute command and get output
-    let output: React.ReactNode;
-    if (commandFn) {
-      output = commandFn(args);
-    } else {
-      output = <p className="text-red-500">Command not found: {cmd}</p>;
-    }
+    // Check if it's a local command
+    if (cmd in localCommands) {
+      const commandFn = localCommands[cmd as keyof typeof localCommands];
+      const output = commandFn(args);
 
-    // Special case for clear command
-    if (cmd === "clear") {
-      setCommandOutputs([]);
-    } else {
-      // Add command and output to terminal
       setCommandOutputs((prev) => [
         ...prev,
         {
@@ -221,10 +172,56 @@ export default function Terminal({
           output,
         },
       ]);
+    } else {
+      // For remote commands, add pending state
+      setCommandOutputs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          command: input,
+          output: <p className="text-gray-500">Executing...</p>,
+          isPending: true,
+        },
+      ]);
+
+      // Send command to server
+      socket.emit("executeCommand", input);
     }
 
-    // Reset input
     setInput("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (historyIndex < commandHistory.length - 1) {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInput(commandHistory[commandHistory.length - 1 - newIndex]);
+      } else if (historyIndex === 0) {
+        setHistoryIndex(-1);
+        setInput("");
+      }
+    } else if (e.key === "Enter") {
+      executeCommand();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const availableCommands = Object.keys(localCommands);
+      const matchingCommands = availableCommands.filter((cmd) =>
+        cmd.startsWith(input)
+      );
+
+      if (matchingCommands.length === 1) {
+        setInput(matchingCommands[0] + " ");
+      }
+    }
   };
 
   return (
@@ -271,7 +268,7 @@ export default function Terminal({
           </button>
           <button
             className="focus:outline-none"
-            onClick={() => commands.clear()}
+            onClick={() => localCommands.clear()}
             aria-label="Clear terminal"
           >
             <X className="w-4 h-4 text-gray-400" />
@@ -288,15 +285,10 @@ export default function Terminal({
           currentTheme.text
         )}
         style={{ height: "calc(100% - 40px)" }}
-        onClick={handleTerminalClick}
-        role="region"
-        aria-label="Terminal output"
         tabIndex={0}
       >
-        {/* Welcome message - only show if not empty */}
         {welcomeMessage && <p className="mb-2">{welcomeMessage}</p>}
 
-        {/* Command outputs */}
         {commandOutputs.map(({ id, command, output }) => (
           <div key={id} className="mb-2">
             <div className="flex">
@@ -307,14 +299,13 @@ export default function Terminal({
           </div>
         ))}
 
-        {/* Current input line */}
         <div className="flex items-center">
           <span className={cn("mr-2", currentTheme.prompt)}>{prompt}</span>
           <input
             ref={inputRef}
             type="text"
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             className={cn(
               "flex-1 bg-transparent border-none outline-none",
