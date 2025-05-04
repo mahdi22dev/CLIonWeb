@@ -7,6 +7,8 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { spawn } from 'child_process';
+import os from 'os';
+import { cwd } from 'node:process';
 
 @WebSocketGateway({ cors: true })
 export class TerminalGateway {
@@ -32,7 +34,11 @@ export class TerminalGateway {
     const [cmd, ...args] = command.trim().split(' ');
 
     try {
-      const child = spawn(cmd, args, { shell: true });
+      const child = spawn(cmd, args, {
+        shell: true,
+      });
+
+      console.log(`Current directory: ${cwd()}`);
 
       // Stream standard output
       child.stdout.on('data', (data) => {
