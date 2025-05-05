@@ -7,8 +7,12 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { spawn } from 'child_process';
-import os from 'os';
 import { cwd } from 'node:process';
+
+interface CommandPayload {
+  id: number;
+  command: string;
+}
 
 @WebSocketGateway({ cors: true })
 export class TerminalGateway {
@@ -26,11 +30,13 @@ export class TerminalGateway {
   @SubscribeMessage('executeCommand')
   handleCommand(
     @ConnectedSocket() client: Socket,
-    @MessageBody() command: string,
+    @MessageBody() payload: CommandPayload,
   ) {
-    console.log(`Received command: ${command} from client: ${client.id}`);
+    const { id, command } = payload;
 
-    // Split the command into the executable and its arguments
+    console.log(`Received command: ${command} from client: ${client.id}`);
+    console.log(`Current directory: ${cwd()}`);
+
     const [cmd, ...args] = command.trim().split(' ');
 
     try {
@@ -38,29 +44,38 @@ export class TerminalGateway {
         shell: true,
       });
 
-      console.log(`Current directory: ${cwd()}`);
-
-      // Stream standard output
       child.stdout.on('data', (data) => {
-        client.emit('commandOutput', data.toString());
+        client.emit('commandOutput', {
+          id,
+          data: data.toString(),
+        });
       });
 
-      // Stream standard error
       child.stderr.on('data', (data) => {
-        client.emit('commandOutput', data.toString());
+        client.emit('commandOutput', {
+          id,
+          data: data.toString(),
+        });
       });
 
-      // Handle process exit
       child.on('close', (code) => {
-        client.emit('commandOutput', `\nProcess exited with code ${code}`);
+        client.emit('commandOutput', {
+          id,
+          data: `\nProcess exited with code ${code}`,
+        });
       });
 
-      // Handle errors during spawning
       child.on('error', (err) => {
-        client.emit('commandOutput', `\nError: ${err.message}`);
+        client.emit('commandOutput', {
+          id,
+          data: `\nError: ${err.message}`,
+        });
       });
-    } catch (err) {
-      client.emit('commandOutput', `\nException: ${err.message}`);
+    } catch (err: any) {
+      client.emit('commandOutput', {
+        id,
+        data: `\nException: ${err.message}`,
+      });
     }
   }
 }

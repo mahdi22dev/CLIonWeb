@@ -132,11 +132,22 @@ export default function Terminal({
 
   useEffect(() => {
     if (!socket) return;
-    const handleCommandOutput = (data: any) => {
+
+    const handleCommandOutput = ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: string;
+    }) => {
       setCommandOutputs((prev) =>
         prev.map((item) =>
-          item.isPending
-            ? { ...item, output: <p>{data}</p>, isPending: false }
+          item.id === id
+            ? {
+                ...item,
+                output: <pre>{data}</pre>,
+                isPending: false,
+              }
             : item
         )
       );
@@ -173,19 +184,19 @@ export default function Terminal({
         },
       ]);
     } else {
-      // For remote commands, add pending state
+      const id = Date.now();
+
       setCommandOutputs((prev) => [
         ...prev,
         {
-          id: Date.now(),
+          id,
           command: input,
           output: <p className="text-gray-500">Executing...</p>,
           isPending: true,
         },
       ]);
 
-      // Send command to server
-      socket.emit("executeCommand", input);
+      socket.emit("executeCommand", { id, command: input });
     }
 
     setInput("");
