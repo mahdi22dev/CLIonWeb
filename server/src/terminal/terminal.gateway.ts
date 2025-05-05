@@ -34,7 +34,7 @@ export class TerminalGateway {
   ) {
     const { id, command } = payload;
 
-    console.log(`Received command: ${command} from client: ${client.id}`);
+    console.log(`Received command: ${command} from command id: ${id}`);
     console.log(`Current directory: ${cwd()}`);
 
     const [cmd, ...args] = command.trim().split(' ');
@@ -45,6 +45,7 @@ export class TerminalGateway {
       });
 
       child.stdout.on('data', (data) => {
+        console.log(data.toString());
         client.emit('commandOutput', {
           id,
           data: data.toString(),
@@ -52,6 +53,7 @@ export class TerminalGateway {
       });
 
       child.stderr.on('data', (data) => {
+        console.log(data.toString());
         client.emit('commandOutput', {
           id,
           data: data.toString(),

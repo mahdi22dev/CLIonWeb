@@ -145,7 +145,12 @@ export default function Terminal({
           item.id === id
             ? {
                 ...item,
-                output: <pre>{data}</pre>,
+                output: (
+                  <>
+                    {item.output}
+                    <pre>{data}</pre>
+                  </>
+                ),
                 isPending: false,
               }
             : item
@@ -191,7 +196,7 @@ export default function Terminal({
         {
           id,
           command: input,
-          output: <p className="text-gray-500">Executing...</p>,
+          output: "",
           isPending: true,
         },
       ]);
@@ -287,7 +292,6 @@ export default function Terminal({
         </div>
       </div>
 
-      {/* Terminal content */}
       <div
         ref={terminalRef}
         className={cn(
