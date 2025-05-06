@@ -24,10 +24,10 @@ export class AuthService {
       const configUsername = 'admin';
 
       if (!username) {
-        throw new NotFoundException('This username is not correct.');
+        throw new NotFoundException('The username is incorrect.');
       }
       if (username !== configUsername) {
-        throw new NotFoundException('This username is not correct.');
+        throw new NotFoundException('The username is incorrect.');
       }
 
       // check passwords
@@ -35,10 +35,10 @@ export class AuthService {
       const configPassword = 'password';
 
       if (!password) {
-        throw new NotFoundException('Provide a password.');
+        throw new NotFoundException('Please provide a password.');
       }
       if (password !== configPassword) {
-        throw new NotFoundException('This username is not correct.');
+        throw new NotFoundException('The password is incorrect.');
       }
 
       // jwt

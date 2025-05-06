@@ -27,6 +27,8 @@ export class AuthController {
     @Body(new ZodValidationPipe(FindUserSchema))
     FindUserDto: FindUserDto,
   ) {
+    console.log(FindUserDto);
+
     return this.authService.signIn(FindUserDto, response, request);
   }
 

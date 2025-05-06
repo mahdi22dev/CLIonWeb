@@ -23,7 +23,6 @@ interface CommandOutput {
 export default function Terminal({
   prompt = ">",
   welcomeMessage = "Welcome to the terminal. Type 'help' for a list of commands.",
-  theme = "dark",
   className,
   socket,
 }: TerminalProps) {
@@ -34,6 +33,11 @@ export default function Terminal({
   const [isMaximized, setIsMaximized] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
+  const [theme, setTheme] = useState<"dark" | "light" | "matrix" | "retro">(
+    (localStorage.getItem("theme") as "dark" | "light" | "matrix" | "retro") ||
+      "dark" ||
+      "dark"
+  );
 
   const themeStyles = {
     dark: {
@@ -100,6 +104,8 @@ export default function Terminal({
     theme: (args: string[]) => {
       const newTheme = args[0] as "dark" | "light" | "matrix" | "retro";
       if (["dark", "light", "matrix", "retro"].includes(newTheme)) {
+        localStorage.setItem("theme", newTheme);
+        setTheme(newTheme);
         return <p>Theme changed to {newTheme}</p>;
       } else {
         return (

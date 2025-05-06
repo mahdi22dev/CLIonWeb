@@ -1,5 +1,6 @@
 "use client";
 import Terminal from "@/components/terminal";
+import Xtrem from "@/components/xtrem";
 import { Socket } from "net";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
@@ -55,6 +56,7 @@ export default function Home() {
         // @ts-ignore
         socket={socket || undefined}
       />
+      {/* <Xtrem /> */}
     </main>
   );
 }
