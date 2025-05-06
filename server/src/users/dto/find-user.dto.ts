@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-export const CreateAuthDtoSchema = z
+export const FindUserSchema = z
   .object({
     username: z.string(),
     password: z.string(),
   })
   .required();
 
-export type CreateAuthDto = z.infer<typeof CreateAuthDtoSchema>;
+export type FindUserDto = z.infer<typeof FindUserSchema>;

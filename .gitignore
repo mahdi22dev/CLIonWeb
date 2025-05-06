@@ -28,3 +28,5 @@ build/
 .DS_Store
 Thumbs.db
 node_modules/
+config.json
+config.yaml
