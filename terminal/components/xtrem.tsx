@@ -20,6 +20,7 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
   const inputBuffer = useRef<string>("");
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [currentCommand, setCurrentCommand] = useState<DataPayload>();
   // const PROMPT = "$mahdi@xtrem:~$ ";
 
   const prompt = () => {
@@ -32,7 +33,10 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     socket?.on("commandOutput", (data: DataPayload) => {
       console.log(data);
       term.current?.write("\r\n");
-      term.current?.writeln(data.data);
+      if (data.data) {
+        term.current?.write(data.data.toString());
+      }
+      // prompt();
     });
     return () => {
       socket.off("commandOutput", () => {});
@@ -60,6 +64,9 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
           term.current.writeln(command.slice(5));
         } else if (command.length > 0) {
           const id = Date.now();
+          const cmd = { id: id, data: command };
+          setCurrentCommand(cmd);
+
           socket?.emit("executeCommand", { id, command });
           // term.current.writeln(`Command not found: ${command}`);
         }
@@ -100,7 +107,6 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
 
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
-
       // Handle Arrow Keys
       if (data === "\u001b[A") {
         // Arrow Up
@@ -123,7 +129,7 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
           term.current?.write("\r\n"); // Move to new line
           handleCommand(command);
           inputBuffer.current = "";
-          prompt();
+          //  prompt();
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {

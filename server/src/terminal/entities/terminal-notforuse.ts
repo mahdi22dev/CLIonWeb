@@ -32,10 +32,10 @@ export class TerminalGateway {
   handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
     const child = this.clientProcesses.get(client.id);
-    // if (child) {
-    //   child.kill();
-    //   this.clientProcesses.delete(client.id);
-    // }
+    if (child) {
+      child.kill();
+      this.clientProcesses.delete(client.id);
+    }
   }
 
   @SubscribeMessage('executeCommand')
@@ -52,38 +52,38 @@ export class TerminalGateway {
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
         console.log('platform', shell);
 
-        child = spawn(shell, [], {
+        child = spawn('bash', [], {
           shell: true,
           stdio: 'pipe',
           cwd: process.env.HOME,
           env: process.env,
         });
 
-        // this.clientProcesses.set(client.id, child);
-        console.log(child);
+        this.clientProcesses.set(client.id, child);
+
         if (child) {
-          // Handle stdout data
           child.stdout.on('data', (data) => {
+            console.log('client id', client.id, '\n');
             console.log(data.toString());
-            client.emit('commandOutput', { id, data: data.toString() }); // Stream output
+            client.emit('commandOutput', { id, data: data.toString() });
           });
 
           // Handle stderr data
           child.stderr.on('data', (data) => {
             console.error(`Error: ${data.toString()}`);
-            client.emit('commandError', { id, error: data.toString() }); // Stream error output
+            client.emit('commandOutput', { id, error: data.toString() });
           });
 
           // Handle process exit
           child.on('exit', (code) => {
             console.log(`Child process exited with code ${code}`);
-            this.clientProcesses.delete(client.id); // Cleanup
+            this.clientProcesses.delete(client.id);
           });
 
           // Handle process errors
           child.on('error', (err) => {
             console.error(`Child process error: ${err.message}`);
-            client.emit('commandError', { id, error: err.message });
+            client.emit('commandOutput', { id, error: err.message });
           });
         }
       }
@@ -91,7 +91,7 @@ export class TerminalGateway {
       child.stdin.write(`${command}\n`); // Send command + newline
     } catch (err) {
       console.error('WebSocket Error:', err);
-      client.emit('error', { message: 'Command execution failed' });
+      client.emit('commandOutput', { message: 'Command execution failed' });
     }
   }
 }

@@ -14,12 +14,17 @@ interface CommandPayload {
   command: string;
 }
 
+interface DataPayload {
+  id: number;
+  data: string;
+}
+
 @WebSocketGateway({ cors: true })
 export class TerminalGateway {
   @WebSocketServer()
   server: Server;
-  private clientProcesses = new Map<string, any>();
-  private terminal: pty.IPty; // Should be your terminal type (e.g., pty.Pty)
+  private clientTerminals = new Map<string, pty.IPty>();
+  private clientBuffers = new Map<string, string>();
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -27,11 +32,12 @@ export class TerminalGateway {
 
   handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
-    const child = this.clientProcesses.get(client.id);
-    // if (child) {
-    //   child.kill();
-    //   this.clientProcesses.delete(client.id);
-    // }
+    const terminal = this.clientTerminals.get(client.id);
+    if (terminal) {
+      terminal.kill();
+      this.clientTerminals.delete(client.id);
+      this.clientBuffers.delete(client.id);
+    }
   }
 
   @SubscribeMessage('executeCommand')
@@ -41,43 +47,57 @@ export class TerminalGateway {
   ) {
     try {
       const { id, command } = payload;
-      let child: pty.IPty = this.clientProcesses.get(client.id);
-
-      // Spawn PTY only once per client
-      if (!child) {
+      let terminal = this.clientTerminals.get(client.id);
+      let buffer = this.clientBuffers.get(client.id) || '';
+      if (!terminal) {
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-        console.log('platform', shell);
 
-        child = pty?.spawn(shell, [], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 30,
+        // Set environment with standardized prompt
+        const env = {
+          ...process.env,
+          PS1: '__TERMINAL_READY__$ ', // Simple, easily detectable prompt
+          TERM: 'xterm-256color',
+        };
+
+        terminal = pty.spawn(shell, ['--noprofile', '--norc'], {
+          name: 'xterm-256color',
           cwd: process.env.HOME,
-          env: process.env,
+          env: env,
         });
 
-        // this.clientProcesses.set(client.id, child);
-        console.log(child);
-        if (child) {
-          child.onData((data) => {
-            console.log(data);
+        this.clientTerminals.set(client.id, terminal);
+        this.clientBuffers.set(client.id, '');
 
-            client.emit('commandOutput', { id, data }); // Stream output
-          });
+        terminal.onData((data) => {
+          buffer += data;
+          this.clientBuffers.set(client.id, buffer);
 
-          child.onExit(() => {
-            child.kill();
-            this.clientProcesses.delete(client.id); // Cleanup
-          });
-        } else {
-          console.log('child is null');
-        }
+          client.emit('commandOutput', { id, data });
+
+          // Look for our custom prompt
+          if (buffer.includes('__TERMINAL_READY__$ ')) {
+            console.log('Shell ready for new commands');
+            buffer = '';
+            this.clientBuffers.set(client.id, buffer);
+          }
+        });
+
+        terminal.onExit(({ exitCode, signal }) => {
+          console.log(`Terminal exited with code ${exitCode}`);
+          this.clientTerminals.delete(client.id);
+          this.clientBuffers.delete(client.id);
+        });
       }
 
-      child.write(`${command}\n`); // Send command + newline
+      // Send command (with newline to execute)
+      terminal.write(`${command}\n`);
     } catch (err) {
       console.error('WebSocket Error:', err);
-      client.emit('error', { message: 'Command execution failed' });
+      client.emit('commandOutput', {
+        id: payload.id,
+        error: 'Command execution failed',
+        message: err.message,
+      });
     }
   }
 }
