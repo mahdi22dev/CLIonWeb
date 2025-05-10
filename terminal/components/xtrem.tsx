@@ -58,6 +58,7 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
         break;
       case "clear":
         term.current.clear();
+        prompt();
         break;
       default:
         if (command.startsWith("echo ")) {

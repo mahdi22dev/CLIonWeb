@@ -7,24 +7,19 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import * as os from 'node:os';
-import * as pty from 'node-pty';
+import * as pty from '@lydell/node-pty';
 
 interface CommandPayload {
   id: number;
   command: string;
 }
 
-interface DataPayload {
-  id: number;
-  data: string;
-}
-
 @WebSocketGateway({ cors: true })
 export class TerminalGateway {
   @WebSocketServer()
   server: Server;
-  private clientTerminals = new Map<string, pty.IPty>();
-  private clientBuffers = new Map<string, string>();
+  private clientProcesses = new Map<string, any>();
+  private terminal: pty.IPty; // Should be your terminal type (e.g., pty.Pty)
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -32,12 +27,11 @@ export class TerminalGateway {
 
   handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
-    const terminal = this.clientTerminals.get(client.id);
-    if (terminal) {
-      terminal.kill();
-      this.clientTerminals.delete(client.id);
-      this.clientBuffers.delete(client.id);
-    }
+    const child = this.clientProcesses.get(client.id);
+    // if (child) {
+    //   child.kill();
+    //   this.clientProcesses.delete(client.id);
+    // }
   }
 
   @SubscribeMessage('executeCommand')
@@ -47,57 +41,49 @@ export class TerminalGateway {
   ) {
     try {
       const { id, command } = payload;
-      let terminal = this.clientTerminals.get(client.id);
-      let buffer = this.clientBuffers.get(client.id) || '';
-      if (!terminal) {
+      let child: pty.IPty = this.clientProcesses.get(client.id);
+
+      // Spawn PTY only once per client
+      if (!child) {
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+        console.log('shell', shell);
 
-        // Set environment with standardized prompt
-        const env = {
-          ...process.env,
-          PS1: '__TERMINAL_READY__$ ', // Simple, easily detectable prompt
-          TERM: 'xterm-256color',
-        };
-
-        terminal = pty.spawn(shell, ['--noprofile', '--norc'], {
-          name: 'xterm-256color',
+        child = pty?.spawn('bash', [], {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 30,
           cwd: process.env.HOME,
-          env: env,
+          env: process.env,
         });
 
-        this.clientTerminals.set(client.id, terminal);
-        this.clientBuffers.set(client.id, '');
+        this.clientProcesses.set(client.id, child);
 
-        terminal.onData((data) => {
-          buffer += data;
-          this.clientBuffers.set(client.id, buffer);
+        if (child) {
+          child.onData((data) => {
+            process.stdout.write(data); // Observe prompt after command output
+          });
 
-          client.emit('commandOutput', { id, data });
+          // child.write('ls\r'); // Triggers output + prompt
 
-          // Look for our custom prompt
-          if (buffer.includes('__TERMINAL_READY__$ ')) {
-            console.log('Shell ready for new commands');
-            buffer = '';
-            this.clientBuffers.set(client.id, buffer);
-          }
-        });
+          child.onData((data) => {
+            console.log(data);
 
-        terminal.onExit(({ exitCode, signal }) => {
-          console.log(`Terminal exited with code ${exitCode}`);
-          this.clientTerminals.delete(client.id);
-          this.clientBuffers.delete(client.id);
-        });
+            client.emit('commandOutput', { id, data }); // Stream output
+          });
+
+          child.onExit(() => {
+            child.kill();
+            this.clientProcesses.delete(client.id); // Cleanup
+          });
+        } else {
+          console.log('child is null');
+        }
       }
 
-      // Send command (with newline to execute)
-      terminal.write(`${command}\n`);
+      child.write(`${command}\n`); // Send command + newline
     } catch (err) {
       console.error('WebSocket Error:', err);
-      client.emit('commandOutput', {
-        id: payload.id,
-        error: 'Command execution failed',
-        message: err.message,
-      });
+      client.emit('error', { message: 'Command execution failed' });
     }
   }
 }
