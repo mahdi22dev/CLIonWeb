@@ -7,19 +7,23 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import * as os from 'node:os';
-import * as pty from 'node-pty';
+import { spawn, ChildProcess } from 'child_process';
 
 interface CommandPayload {
   id: number;
   command: string;
 }
 
+interface DataPayload {
+  id: number;
+  data: string;
+}
+
 @WebSocketGateway({ cors: true })
 export class TerminalGateway {
   @WebSocketServer()
   server: Server;
-  private clientProcesses = new Map<string, any>();
-  private terminal: pty.IPty; // Should be your terminal type (e.g., pty.Pty)
+  private clientProcesses = new Map<string, ChildProcess>();
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -41,17 +45,16 @@ export class TerminalGateway {
   ) {
     try {
       const { id, command } = payload;
-      let child: pty.IPty = this.clientProcesses.get(client.id);
+      let child: ChildProcess = this.clientProcesses.get(client.id);
 
-      // Spawn PTY only once per client
+      // Spawn child process only once per client
       if (!child) {
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
         console.log('platform', shell);
 
-        child = pty?.spawn(shell, [], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 30,
+        child = spawn(shell, [], {
+          shell: true,
+          stdio: 'pipe',
           cwd: process.env.HOME,
           env: process.env,
         });
@@ -59,22 +62,33 @@ export class TerminalGateway {
         // this.clientProcesses.set(client.id, child);
         console.log(child);
         if (child) {
-          child.onData((data) => {
-            console.log(data);
-
-            client.emit('commandOutput', { id, data }); // Stream output
+          // Handle stdout data
+          child.stdout.on('data', (data) => {
+            console.log(data.toString());
+            client.emit('commandOutput', { id, data: data.toString() }); // Stream output
           });
 
-          child.onExit(() => {
-            child.kill();
+          // Handle stderr data
+          child.stderr.on('data', (data) => {
+            console.error(`Error: ${data.toString()}`);
+            client.emit('commandError', { id, error: data.toString() }); // Stream error output
+          });
+
+          // Handle process exit
+          child.on('exit', (code) => {
+            console.log(`Child process exited with code ${code}`);
             this.clientProcesses.delete(client.id); // Cleanup
           });
-        } else {
-          console.log('child is null');
+
+          // Handle process errors
+          child.on('error', (err) => {
+            console.error(`Child process error: ${err.message}`);
+            client.emit('commandError', { id, error: err.message });
+          });
         }
       }
 
-      child.write(`${command}\n`); // Send command + newline
+      child.stdin.write(`${command}\n`); // Send command + newline
     } catch (err) {
       console.error('WebSocket Error:', err);
       client.emit('error', { message: 'Command execution failed' });

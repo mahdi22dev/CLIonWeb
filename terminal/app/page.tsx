@@ -1,17 +1,14 @@
 "use client";
 import Terminal from "@/components/terminal";
-import Xtrem from "@/components/xtrem";
 import { Socket } from "net";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import dynamic from "next/dynamic";
+
+const Xtrem = dynamic(() => import("@/components/xtrem"), { ssr: false });
 
 export default function Home() {
   const [socket, setSocket] = useState<Socket>();
-  const sendCommand = ({ socket, command }: { socket: any; command: any }) => {
-    if (socket) {
-      socket.emit("executeCommand", command);
-    }
-  };
 
   useEffect(() => {
     // Initialize socket connection
@@ -38,25 +35,22 @@ export default function Home() {
       setSocket(socketInstance);
     }
 
-    // socketInstance.on("commandOutput", (data) => {
-    //   console.log(data);
-    // });
-
-    // Cleanup on component unmount
     return () => {
       socketInstance.disconnect();
     };
   }, []);
+
   return (
     <main className="flex min-h-screen w-full bg-slate-900">
-      <Terminal
+      {/* <Terminal
         prompt="guest@react-terminal:~$"
         theme="dark"
         className="w-full h-screen rounded-none border-none"
         // @ts-ignore
         socket={socket || undefined}
-      />
-      {/* <Xtrem /> */}
+      /> */}
+      {/* @ts-ignore */}
+      <Xtrem socket={socket || undefined} />
     </main>
   );
 }
