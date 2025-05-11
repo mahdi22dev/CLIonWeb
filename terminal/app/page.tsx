@@ -1,17 +1,17 @@
 "use client";
-import Terminal from "@/components/terminal";
-import { Socket } from "net";
+
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import dynamic from "next/dynamic";
 
 const Xtrem = dynamic(() => import("@/components/xtrem"), { ssr: false });
 
 export default function Home() {
-  const [socket, setSocket] = useState<Socket>();
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [clientID, setClientID] = useState<number>(345345234235425);
+  const [initPty, setInitPty] = useState<initPtyProps | null>(null);
 
   useEffect(() => {
-    // Initialize socket connection
     const socketInstance = io("http://localhost:3001", {
       reconnection: true,
       reconnectionAttempts: 5,
@@ -26,14 +26,20 @@ export default function Home() {
       console.log("Disconnected from WebSocket server");
     });
 
-    socketInstance.on("commandOutput", (data) => {
-      console.log(data);
-    });
+    socketInstance.emit(
+      "createTerminal",
+      { id: clientID },
+      async (response: initPtyProps) => {
+        console.log("Server acknowledged createTerminal:", response);
+        await new Promise((resolve) => {
+          setTimeout(resolve, 1000);
+        });
+        setInitPty(response);
+        console.log("Initial pty response:", response.propmt);
+      }
+    );
 
-    if (socketInstance) {
-      // @ts-ignore
-      setSocket(socketInstance);
-    }
+    setSocket(socketInstance);
 
     return () => {
       socketInstance.disconnect();
@@ -42,15 +48,11 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen w-full bg-slate-900">
-      {/* <Terminal
-        prompt="guest@react-terminal:~$"
-        theme="dark"
-        className="w-full h-screen rounded-none border-none"
-        // @ts-ignore
-        socket={socket || undefined}
-      /> */}
-      {/* @ts-ignore */}
-      <Xtrem socket={socket || undefined} />
+      {socket ? (
+        <Xtrem socket={socket} clientID={clientID} PROMPT={initPty?.propmt} />
+      ) : (
+        <p className="text-white m-auto">Connecting to terminal...</p>
+      )}
     </main>
   );
 }

@@ -8,13 +8,15 @@ import { Socket } from "socket.io-client";
 interface TerminalProps {
   PROMPT?: string;
   socket: Socket | undefined;
+  clientID: number;
 }
 
 interface DataPayload {
   id: number;
   data: string;
 }
-const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
+
+const Xtrem = ({ PROMPT, socket, clientID }: TerminalProps) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
@@ -22,14 +24,13 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentCommand, setCurrentCommand] = useState<DataPayload>();
   const [termPID, setTermPID] = useState<number>();
-  const [clientID, setClientID] = useState<number>(345345234235425);
-  const [ptyPrompt, setPtyPrompt] = useState<string>("");
+  const ptyPromptRef = useRef<string>("");
   // const PROMPT = "$mahdi@xtrem:~$ ";
 
   const prompt = () => {
-    console.log("ptyPrompt:", ptyPrompt);
+    console.log("ptyPrompt:", PROMPT);
     term.current?.write("\r\n");
-    term.current?.write(`${ptyPrompt} `);
+    term.current?.write(`${PROMPT} null`);
   };
 
   useEffect(() => {
@@ -43,23 +44,23 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
       }
     });
 
-    socket?.on(
-      "terminalPID",
-      (data: { clientId: number; pid: number; data: string }) => {
-        setTermPID(data.clientId);
-        console.log("Terminal PID:", data.pid);
-        console.log(data.data);
-        setPtyPrompt(data.data.toString());
-        term.current?.write("\r\n");
-        term.current?.write(`${data.data.toString()} `);
-      }
-    );
+    // socket?.on(
+    //   "terminalPID",
+    //   (data: { clientId: number; pid: number; data: string }) => {
+    //     setTermPID(data.clientId);
+    //     console.log("Terminal PID:", data.pid);
+    //     console.log(data.data);
+    //     ptyPromptRef.current = data.data;
+    //     term.current?.write("\r\n");
+    //     term.current?.write(`${data.data.toString()} none`);
+    //   }
+    // );
 
     return () => {
       socket.off("commandOutput", () => {});
       socket.off("terminalPID", () => {});
     };
-  }, []);
+  }, [socket]);
 
   const handleCommand = (command: string) => {
     if (!term.current) return;
@@ -76,9 +77,7 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
         break;
       case "clear":
         term.current.clear();
-        if (ptyPrompt && term.current) {
-          prompt();
-        }
+        term.current?.writeln(PROMPT ? PROMPT : "$mahdi@xtrem:~$ ");
 
         break;
       default:
@@ -88,7 +87,6 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
           const cmd = { id: clientID, data: command };
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
-          // term.current.writeln(`Command not found: ${command}`);
         }
     }
   };
@@ -97,8 +95,6 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     if (!socket) return;
     if (!terminalRef.current) return;
     const fitAddon = new FitAddon();
-    console.log("creating a terminal");
-    socket?.emit("createTerminal", { id: clientID });
 
     term.current = new Terminal({
       cursorBlink: true,
@@ -128,6 +124,11 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     term.current.open(terminalRef.current);
     fitAddon.fit();
 
+    // console.log("creating a terminal");
+    // socket?.emit("createTerminal", { id: clientID }, (response: any) => {
+    //   console.log("Server acknowledged createTerminal:", response);
+    // });
+    prompt();
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
@@ -152,7 +153,6 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
           term.current?.write("\r\n"); // Move to new line
           handleCommand(command);
           inputBuffer.current = "";
-          //  prompt();
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {
@@ -169,11 +169,10 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     const resizeObserver = new ResizeObserver(() => fitAddon.fit());
     resizeObserver.observe(terminalRef.current);
 
-    // prompt();
-
     return () => {
       term.current?.dispose();
       resizeObserver.disconnect();
+      socket.off("createTerminal", () => {});
     };
   }, []);
 
