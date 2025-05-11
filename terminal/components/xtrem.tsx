@@ -21,25 +21,43 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentCommand, setCurrentCommand] = useState<DataPayload>();
+  const [termPID, setTermPID] = useState<number>();
+  const [clientID, setClientID] = useState<number>(345345234235425);
+  const [ptyPrompt, setPtyPrompt] = useState<string>("");
   // const PROMPT = "$mahdi@xtrem:~$ ";
 
   const prompt = () => {
-    term.current?.write(PROMPT);
+    console.log("ptyPrompt:", ptyPrompt);
+    term.current?.write("\r\n");
+    term.current?.write(`${ptyPrompt} `);
   };
+
   useEffect(() => {
     if (!socket) return;
     if (!term.current) return;
 
     socket?.on("commandOutput", (data: DataPayload) => {
-      console.log(data);
       term.current?.write("\r\n");
       if (data.data) {
         term.current?.write(data.data.toString());
       }
-      // prompt();
     });
+
+    socket?.on(
+      "terminalPID",
+      (data: { clientId: number; pid: number; data: string }) => {
+        setTermPID(data.clientId);
+        console.log("Terminal PID:", data.pid);
+        console.log(data.data);
+        setPtyPrompt(data.data.toString());
+        term.current?.write("\r\n");
+        term.current?.write(`${data.data.toString()} `);
+      }
+    );
+
     return () => {
       socket.off("commandOutput", () => {});
+      socket.off("terminalPID", () => {});
     };
   }, []);
 
@@ -58,17 +76,18 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
         break;
       case "clear":
         term.current.clear();
-        prompt();
+        if (ptyPrompt && term.current) {
+          prompt();
+        }
+
         break;
       default:
         if (command.startsWith("echo ")) {
           term.current.writeln(command.slice(5));
         } else if (command.length > 0) {
-          const id = Date.now();
-          const cmd = { id: id, data: command };
+          const cmd = { id: clientID, data: command };
           setCurrentCommand(cmd);
-
-          socket?.emit("executeCommand", { id, command });
+          socket?.emit("executeCommand", { clientID, command });
           // term.current.writeln(`Command not found: ${command}`);
         }
     }
@@ -78,6 +97,9 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     if (!socket) return;
     if (!terminalRef.current) return;
     const fitAddon = new FitAddon();
+    console.log("creating a terminal");
+    socket?.emit("createTerminal", { id: clientID });
+
     term.current = new Terminal({
       cursorBlink: true,
       fontSize: 16,
@@ -147,7 +169,7 @@ const Xtrem = ({ PROMPT = "$mahdi@xtrem:~$ ", socket }: TerminalProps) => {
     const resizeObserver = new ResizeObserver(() => fitAddon.fit());
     resizeObserver.observe(terminalRef.current);
 
-    prompt();
+    // prompt();
 
     return () => {
       term.current?.dispose();
