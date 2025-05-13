@@ -1,0 +1,21 @@
+{
+  "name": "CLIonWeb",
+  "private": true,
+  "workspaces": [
+    "terminal",
+    "server"
+  ],
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "concurrently \"cd terminal && npm run dev\" \"cd server && npm run dev \""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
