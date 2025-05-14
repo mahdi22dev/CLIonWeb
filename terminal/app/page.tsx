@@ -17,19 +17,10 @@ export default function Home() {
       reconnectionDelay: 1000,
     });
 
-    socketInstance.on("connect", () => {
-      console.log("Connected to WebSocket server");
-    });
-
-    socketInstance.on("disconnect", () => {
-      console.log("Disconnected from WebSocket server");
-    });
-
     socketInstance.emit(
       "createTerminal",
       { id: clientID },
       async (response: initPtyProps) => {
-        console.log("Server acknowledged createTerminal:", response);
         setInitPty(response);
       }
     );
