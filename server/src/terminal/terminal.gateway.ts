@@ -5,6 +5,7 @@ import {
   MessageBody,
   ConnectedSocket,
 } from '@nestjs/websockets';
+
 import { Server, Socket } from 'socket.io';
 import * as os from 'node:os';
 import * as pty from '@lydell/node-pty';
@@ -14,7 +15,7 @@ interface CommandPayload {
   command: string;
 }
 
-@WebSocketGateway({ cors: true })
+@WebSocketGateway()
 export class TerminalGateway {
   @WebSocketServer()
   server: Server;

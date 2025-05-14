@@ -12,8 +12,9 @@ export default function Home() {
 
   useEffect(() => {
     const socketInstance = io("http://localhost:3001", {
+      transports: ["websocket"],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
     });
 
