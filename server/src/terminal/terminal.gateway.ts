@@ -88,14 +88,10 @@ export class TerminalGateway {
   async handleTerminalCreation(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: { id: number },
-    callback: (res: any) => void, // <-- remove the decorator
   ) {
     try {
       const { id } = payload;
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-      console.log('Creating a new terminal');
-      client.emit('terminalPID', { id: 'testing behavior' });
-
       let unsentData = '';
       const child = pty?.spawn(shell, [], {
         name: 'xterm-256color',

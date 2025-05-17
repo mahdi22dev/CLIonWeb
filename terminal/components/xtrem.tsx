@@ -4,11 +4,14 @@ import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Socket } from "socket.io-client";
+import { initPtyProps } from "@/lib/types";
 
 interface TerminalProps {
   PROMPT?: string;
   socket: Socket | undefined;
   clientID: number;
+  setInitPty: React.Dispatch<React.SetStateAction<initPtyProps | null>>;
+  initPty: initPtyProps | null;
 }
 
 interface DataPayload {
@@ -16,7 +19,7 @@ interface DataPayload {
   data: string;
 }
 
-const Xtrem = ({ PROMPT, socket, clientID }: TerminalProps) => {
+const Xtrem = ({ PROMPT, socket, clientID,setInitPty ,initPty}: TerminalProps) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
@@ -43,17 +46,6 @@ const Xtrem = ({ PROMPT, socket, clientID }: TerminalProps) => {
       }
     });
 
-    // socket?.on(
-    //   "terminalPID",
-    //   (data: { clientId: number; pid: number; data: string }) => {
-    //     setTermPID(data.clientId);
-    //     console.log("Terminal PID:", data.pid);
-    //     console.log(data.data);
-    //     ptyPromptRef.current = data.data;
-    //     term.current?.write("\r\n");
-    //     term.current?.write(`${data.data.toString()} none`);
-    //   }
-    // );
 
     return () => {
       socket.off("commandOutput", () => {});
@@ -75,9 +67,19 @@ const Xtrem = ({ PROMPT, socket, clientID }: TerminalProps) => {
         term.current.writeln("Available commands: help, clear, echo [text]");
         break;
       case "clear":
-        term.current.clear();
-        term.current?.writeln(PROMPT ? PROMPT : "$mahdi@xtrem:~$ ");
-
+       
+        socket?.emit(
+          "createTerminal",
+          { id: clientID },
+          async (response: initPtyProps) => {
+            console.log("Terminal PID:", response.pid);
+            setInitPty(response);
+            
+          }
+        );
+        // term.current.clear();
+        initPty && term.current?.writeln(initPty.prompt || "$mahdi@xtrem:~$ ");
+      
         break;
       default:
         if (command.startsWith("echo ")) {
@@ -123,10 +125,7 @@ const Xtrem = ({ PROMPT, socket, clientID }: TerminalProps) => {
     term.current.open(terminalRef.current);
     fitAddon.fit();
 
-    // console.log("creating a terminal");
-    // socket?.emit("createTerminal", { id: clientID }, (response: any) => {
-    //   console.log("Server acknowledged createTerminal:", response);
-    // });
+   
     prompt();
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
