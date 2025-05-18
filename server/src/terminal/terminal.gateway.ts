@@ -108,13 +108,8 @@ export class TerminalGateway {
         console.log('pty output:', data);
         unsentData += data;
         this.terminal.set(id, { clientID: id, process: child });
-
-        // client.emit('terminalPID', {
-        //   id,
-        //   pid: this.terminal.get(id).process.pid,
-        //   data: data,
-        // });
       });
+      // remove this write better code
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });

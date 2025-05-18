@@ -29,13 +29,9 @@ const Xtrem = ({
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentCommand, setCurrentCommand] = useState<DataPayload>();
-  const [termPID, setTermPID] = useState<number>();
-  const ptyPromptRef = useRef<string>("");
-  // const PROMPT = "$mahdi@xtrem:~$ ";
-
+  const commandHistory = useRef<string[]>([]);
   const prompt = () => {
     term.current?.write("\r\n");
     term.current?.write(`${PROMPT}`);
@@ -61,12 +57,7 @@ const Xtrem = ({
   const handleCommand = (command: string) => {
     if (!term.current) return;
 
-    setCommandHistory((prev) => {
-      const updatedHistory = [...prev, command];
-      console.log("Updated command history:", updatedHistory);
-      return updatedHistory;
-    });
-
+    commandHistory.current = [...commandHistory.current, command];
     switch (command) {
       case "help":
         term.current.writeln("Available commands: help, clear, echo [text]");
@@ -77,24 +68,27 @@ const Xtrem = ({
           "createTerminal",
           { id: clientID },
           async (response: initPtyProps) => {
-            console.log("clearing terminal");
-            console.log("Terminal PID:", response.pid);
             setInitPty(response);
             initPty && prompt();
           }
         );
-
         break;
       default:
-        if (command.startsWith("echo ")) {
-          term.current.writeln(command.slice(5));
-        } else if (command.length > 0) {
+        if (command.length > 0) {
           const cmd = { id: clientID, data: command };
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
         }
     }
   };
+
+  useEffect(() => {
+    console.log(historyIndex);
+    console.log(commandHistory.current.length);
+    if (historyIndex < commandHistory.current.length) {
+      console.log("command we set:", commandHistory.current[historyIndex - 1]);
+    }
+  }, [commandHistory.current, historyIndex]);
 
   useEffect(() => {
     if (!socket) return;
@@ -134,15 +128,9 @@ const Xtrem = ({
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
       if (data === "\u001b[A") {
-        // Arrow Up
-        if (historyIndex < commandHistory.length - 1) {
-          const newIndex = historyIndex + 1;
-          setHistoryIndex(newIndex);
-          term.current?.write("\r\n");
-          term.current?.writeln(
-            commandHistory[commandHistory.length - 1 - newIndex]
-          );
-        }
+        const lastCommand = commandHistory.current.length - 1;
+        console.log("last commnad", lastCommand);
+        term.current?.writeln(`${commandHistory.current[lastCommand]}`);
       } else if (data === "\u001b[B") {
         // Arrow Down
         term.current?.write("\r\n");
