@@ -19,21 +19,15 @@ interface CommandPayload {
 export class TerminalGateway {
   @WebSocketServer()
   server: Server;
-  private clientProcesses = new Map<string, any>();
   private terminal = new Map<number, { clientID: number; process: pty.IPty }>();
 
-  // handleConnection(client: Socket) {
-  //   console.log(`Client connected: ${client.id}`);
-  // }
+  handleConnection(client: Socket) {
+    console.log(`Client connected: ${client.id}`);
+  }
 
-  // handleDisconnect(client: Socket) {
-  //   console.log(`Client disconnected: ${client.id}`);
-  //   const child = this.clientProcesses.get(client.id);
-  //   // if (child) {
-  //   //   child.kill();
-  //   //   this.clientProcesses.delete(client.id);
-  //   // }
-  // }
+  handleDisconnect(client: Socket) {
+    console.log(`Client disconnected: ${client.id}`);
+  }
 
   @SubscribeMessage('executeCommand')
   handleCommand(
@@ -43,14 +37,13 @@ export class TerminalGateway {
     try {
       const { id, command } = payload;
       let child: pty.IPty = this.terminal.get(id)?.process;
-
+      console.log('child:', child?.pid);
       // Spawn PTY only once per client
       if (!child) {
-        console.log('Creating a new child process');
         const bashPath = 'C:/Program Files/Git/bin/bash.exe';
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
         const config = { using: 'bash', shell: bashPath };
-        const child = pty?.spawn(shell, ['-i'], {
+        child = pty?.spawn(shell, [], {
           name: 'xterm-256color',
           cols: 80,
           rows: 30,
@@ -60,26 +53,25 @@ export class TerminalGateway {
             TERM: 'xterm-256color',
           },
         });
-
-        this.clientProcesses.set(client.id, child);
-
-        if (child) {
-          child.onData((data) => {
-            console.log(data);
-            client.emit('commandOutput', { id, data }); // Stream output
-          });
-
-          child.onExit(() => {
-            child.kill();
-            this.clientProcesses.delete(client.id); // Cleanup
-          });
-        } else {
-          console.log('Child is null');
-        }
+        console.log(
+          "we spawned new child because we didn't found one:",
+          child.pid,
+        );
+        this.terminal.set(id, { clientID: id, process: child });
       }
-      console.log(command);
 
-      child.write(`${command}\n`);
+      if (child) {
+        child.onData((data) => {
+          client.emit('commandOutput', { id, data });
+        });
+
+        child.onExit(() => {
+          child.kill();
+          this.terminal.delete(id);
+        });
+      }
+
+      child.write(`${command}\r`);
     } catch (err) {
       console.error('WebSocket Error:', err);
       client.emit('error', { message: 'Command execution failed' });
@@ -93,11 +85,20 @@ export class TerminalGateway {
   ) {
     try {
       const { id } = payload;
+      const existingTerminal = this.terminal.get(id);
+      if (existingTerminal) {
+        console.log('Terminal already exists:', existingTerminal);
+        return {
+          id,
+          pid: existingTerminal.process.pid,
+          prompt: existingTerminal.process,
+        };
+      }
       const bashPath = 'C:/Program Files/Git/bin/bash.exe';
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
       const config = { using: 'bash', shell: bashPath };
       let unsentData = '';
-      const child = pty?.spawn(shell, ['-i'], {
+      const child = pty?.spawn(shell, [], {
         name: 'xterm-256color',
         cols: 80,
         rows: 30,
@@ -107,17 +108,17 @@ export class TerminalGateway {
           TERM: 'xterm-256color',
         },
       });
+      this.terminal.set(id, { clientID: id, process: child });
 
       child.onData((data) => {
-        console.log('pty output:', data);
+        console.log('pty first output:', data);
         unsentData += data;
-        this.terminal.set(id, { clientID: id, process: child });
       });
       // remove this write better code
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });
-
+      console.log('created child:', child.pid);
       return {
         id,
         pid: this.terminal.get(id)?.process.pid,

@@ -31,6 +31,7 @@ const Xtrem = ({
   const inputBuffer = useRef<string>("");
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [currentCommand, setCurrentCommand] = useState<DataPayload>();
+  const isFirstCommand = useRef(true); // Ref to track the first command
   const commandHistory = useRef<string[]>([]);
   const prompt = () => {
     term.current?.write("\r\n");
@@ -63,6 +64,7 @@ const Xtrem = ({
         term.current.writeln("Available commands: help, clear, echo [text]");
         break;
       case "clear":
+        isFirstCommand.current = true;
         term.current.clear();
         socket?.emit(
           "createTerminal",
@@ -74,9 +76,12 @@ const Xtrem = ({
         );
         break;
       default:
+        // if (isFirstCommand.current) {
+        //   term.current?.clear();
+        // }
         if (command.length > 0) {
+          isFirstCommand.current = false;
           console.log("command:", command);
-
           const cmd = { id: clientID, data: command };
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
