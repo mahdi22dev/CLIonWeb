@@ -47,9 +47,10 @@ export class TerminalGateway {
       // Spawn PTY only once per client
       if (!child) {
         console.log('Creating a new child process');
+        const bashPath = 'C:/Program Files/Git/bin/bash.exe';
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-
-        child = pty?.spawn(shell, [], {
+        const config = { using: 'bash', shell: bashPath };
+        const child = pty?.spawn(shell, ['-i'], {
           name: 'xterm-256color',
           cols: 80,
           rows: 30,
@@ -76,6 +77,7 @@ export class TerminalGateway {
           console.log('Child is null');
         }
       }
+      console.log(command);
 
       child.write(`${command}\n`);
     } catch (err) {
@@ -91,9 +93,11 @@ export class TerminalGateway {
   ) {
     try {
       const { id } = payload;
+      const bashPath = 'C:/Program Files/Git/bin/bash.exe';
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+      const config = { using: 'bash', shell: bashPath };
       let unsentData = '';
-      const child = pty?.spawn(shell, [], {
+      const child = pty?.spawn(shell, ['-i'], {
         name: 'xterm-256color',
         cols: 80,
         rows: 30,

@@ -75,6 +75,8 @@ const Xtrem = ({
         break;
       default:
         if (command.length > 0) {
+          console.log("command:", command);
+
           const cmd = { id: clientID, data: command };
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
