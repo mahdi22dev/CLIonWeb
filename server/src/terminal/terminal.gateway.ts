@@ -11,7 +11,7 @@ import * as os from 'node:os';
 import * as pty from '@lydell/node-pty';
 
 interface CommandPayload {
-  id: number;
+  clientID: number;
   command: string;
 }
 
@@ -27,6 +27,8 @@ export class TerminalGateway {
 
   handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
+    this.terminal.clear();
+    console.log('logging the map', this.terminal);
   }
 
   @SubscribeMessage('executeCommand')
@@ -35,14 +37,20 @@ export class TerminalGateway {
     @MessageBody() payload: CommandPayload,
   ) {
     try {
-      const { id, command } = payload;
+      const { clientID: id, command } = payload;
+
+      console.log('client:', payload);
+      const existingTerminal = this.terminal.get(payload.clientID);
+      if (existingTerminal) {
+        console.log('Terminal already exists during excuting');
+      }
+
       let child: pty.IPty = this.terminal.get(id)?.process;
-      console.log('child:', child?.pid);
+      console.log('child found:', child?.pid);
       // Spawn PTY only once per client
       if (!child) {
         const bashPath = 'C:/Program Files/Git/bin/bash.exe';
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-        const config = { using: 'bash', shell: bashPath };
         child = pty?.spawn(shell, [], {
           name: 'xterm-256color',
           cols: 80,
@@ -87,16 +95,10 @@ export class TerminalGateway {
       const { id } = payload;
       const existingTerminal = this.terminal.get(id);
       if (existingTerminal) {
-        console.log('Terminal already exists:', existingTerminal);
-        return {
-          id,
-          pid: existingTerminal.process.pid,
-          prompt: existingTerminal.process,
-        };
+        console.log('Terminal already exists');
       }
       const bashPath = 'C:/Program Files/Git/bin/bash.exe';
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-      const config = { using: 'bash', shell: bashPath };
       let unsentData = '';
       const child = pty?.spawn(shell, [], {
         name: 'xterm-256color',
@@ -108,8 +110,7 @@ export class TerminalGateway {
           TERM: 'xterm-256color',
         },
       });
-      this.terminal.set(id, { clientID: id, process: child });
-
+      child && this.terminal.set(id, { clientID: id, process: child });
       child.onData((data) => {
         console.log('pty first output:', data);
         unsentData += data;
@@ -118,7 +119,7 @@ export class TerminalGateway {
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });
-      console.log('created child:', child.pid);
+      console.log('created new child:', child.pid);
       return {
         id,
         pid: this.terminal.get(id)?.process.pid,

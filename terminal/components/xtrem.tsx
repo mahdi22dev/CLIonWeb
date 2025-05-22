@@ -83,19 +83,21 @@ const Xtrem = ({
           isFirstCommand.current = false;
           console.log("command:", command);
           const cmd = { id: clientID, data: command };
+          console.log("cmd:", cmd);
+
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
         }
     }
   };
 
-  useEffect(() => {
-    console.log(historyIndex);
-    console.log(commandHistory.current.length);
-    if (historyIndex < commandHistory.current.length) {
-      console.log("command we set:", commandHistory.current[historyIndex - 1]);
-    }
-  }, [commandHistory.current, historyIndex]);
+  // useEffect(() => {
+  //   console.log(historyIndex);
+  //   console.log(commandHistory.current.length);
+  //   if (historyIndex < commandHistory.current.length) {
+  //     console.log("command we set:", commandHistory.current[historyIndex - 1]);
+  //   }
+  // }, [commandHistory.current, historyIndex]);
 
   useEffect(() => {
     if (!socket) return;
@@ -130,7 +132,7 @@ const Xtrem = ({
     term.current.open(terminalRef.current);
     fitAddon.fit();
 
-    prompt();
+    // prompt();
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
@@ -145,9 +147,8 @@ const Xtrem = ({
       } else {
         // Handle ENTER key
         if (code === 13) {
-          const command = inputBuffer.current.trim();
-          term.current?.write("\r\n"); // Move to new line
-          handleCommand(command);
+          // term.current?.write("\r\n"); // Move to new line
+          handleCommand(inputBuffer.current);
           inputBuffer.current = "";
           // Handle BACKSPACE
         } else if (code === 127) {

@@ -28,6 +28,8 @@ export default function Home() {
       "createTerminal",
       { id: clientID },
       async (response: initPtyProps) => {
+        console.log(response);
+
         setInitPty(response);
       }
     );
@@ -42,7 +44,9 @@ export default function Home() {
   if (connexionError) {
     return (
       <main className="flex min-h-screen w-full bg-slate-900">
-        <p className="text-white m-auto">Connection error, can't establish a connection with the server</p>
+        <p className="text-white m-auto">
+          Connection error, can't establish a connection with the server
+        </p>
       </main>
     );
   }
@@ -50,7 +54,13 @@ export default function Home() {
   return (
     <main className="flex min-h-screen w-full bg-slate-900">
       {socket && initPty?.prompt ? (
-        <Xtrem socket={socket} clientID={clientID} PROMPT={initPty?.prompt} initPty={initPty}  setInitPty={setInitPty}/>
+        <Xtrem
+          socket={socket}
+          clientID={clientID}
+          PROMPT={initPty?.prompt}
+          initPty={initPty}
+          setInitPty={setInitPty}
+        />
       ) : (
         <p className="text-white m-auto">Connecting to terminal...</p>
       )}
