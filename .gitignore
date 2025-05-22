@@ -30,3 +30,6 @@ Thumbs.db
 node_modules/
 config.json
 config.yaml
+
+# Temporary files
+steps.txt

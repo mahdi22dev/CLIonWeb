@@ -20,6 +20,7 @@ export class TerminalGateway {
   @WebSocketServer()
   server: Server;
   private terminal = new Map<number, { clientID: number; process: pty.IPty }>();
+  private command: string;
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -28,7 +29,6 @@ export class TerminalGateway {
   handleDisconnect(client: Socket) {
     console.log(`Client disconnected: ${client.id}`);
     this.terminal.clear();
-    console.log('logging the map', this.terminal);
   }
 
   @SubscribeMessage('executeCommand')
@@ -38,20 +38,24 @@ export class TerminalGateway {
   ) {
     try {
       const { clientID: id, command } = payload;
-
-      console.log('client:', payload);
-      const existingTerminal = this.terminal.get(payload.clientID);
-      if (existingTerminal) {
-        console.log('Terminal already exists during excuting');
-      }
-
+      this.command = command;
       let child: pty.IPty = this.terminal.get(id)?.process;
-      console.log('child found:', child?.pid);
-      // Spawn PTY only once per client
+
       if (!child) {
         const bashPath = 'C:/Program Files/Git/bin/bash.exe';
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-        child = pty?.spawn(shell, [], {
+        const args =
+          shell === 'bash'
+            ? ['-c', 'stty -echo; exec bash']
+            : [
+                '-NoLogo', // Removes PowerShell startup banner
+                '-NoProfile', // Prevents loading user profile (faster + cleaner)
+                '-ExecutionPolicy',
+                'Bypass', // Bypass script restrictions (safe in sandbox)
+                '-Command',
+                '-', // Accept commands via stdin (interactive)
+              ];
+        child = pty?.spawn(shell, args, {
           name: 'xterm-256color',
           cols: 80,
           rows: 30,
@@ -61,18 +65,11 @@ export class TerminalGateway {
             TERM: 'xterm-256color',
           },
         });
-        console.log(
-          "we spawned new child because we didn't found one:",
-          child.pid,
-        );
+
         this.terminal.set(id, { clientID: id, process: child });
       }
 
       if (child) {
-        child.onData((data) => {
-          client.emit('commandOutput', { id, data });
-        });
-
         child.onExit(() => {
           child.kill();
           this.terminal.delete(id);
@@ -95,12 +92,24 @@ export class TerminalGateway {
       const { id } = payload;
       const existingTerminal = this.terminal.get(id);
       if (existingTerminal) {
-        console.log('Terminal already exists');
+        return;
       }
       const bashPath = 'C:/Program Files/Git/bin/bash.exe';
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
       let unsentData = '';
-      const child = pty?.spawn(shell, [], {
+      const args =
+        shell === 'bash'
+          ? ['-c', 'stty -echo; exec bash']
+          : [
+              '-NoLogo',
+              '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-Command',
+              '-',
+            ];
+
+      const child = pty?.spawn(shell, args, {
         name: 'xterm-256color',
         cols: 80,
         rows: 30,
@@ -111,15 +120,18 @@ export class TerminalGateway {
         },
       });
       child && this.terminal.set(id, { clientID: id, process: child });
+
       child.onData((data) => {
-        console.log('pty first output:', data);
         unsentData += data;
+        client.emit('commandOutput', { id, data });
       });
+
       // remove this write better code
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });
-      console.log('created new child:', child.pid);
+      // remove this write better code
+
       return {
         id,
         pid: this.terminal.get(id)?.process.pid,

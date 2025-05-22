@@ -84,7 +84,6 @@ const Xtrem = ({
           console.log("command:", command);
           const cmd = { id: clientID, data: command };
           console.log("cmd:", cmd);
-
           setCurrentCommand(cmd);
           socket?.emit("executeCommand", { clientID, command });
         }
@@ -132,7 +131,7 @@ const Xtrem = ({
     term.current.open(terminalRef.current);
     fitAddon.fit();
 
-    // prompt();
+    prompt();
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
       // Handle Arrow Keys

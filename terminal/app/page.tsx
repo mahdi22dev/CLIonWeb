@@ -29,7 +29,6 @@ export default function Home() {
       { id: clientID },
       async (response: initPtyProps) => {
         console.log(response);
-
         setInitPty(response);
       }
     );
