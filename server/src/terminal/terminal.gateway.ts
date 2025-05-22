@@ -20,7 +20,6 @@ export class TerminalGateway {
   @WebSocketServer()
   server: Server;
   private terminal = new Map<number, { clientID: number; process: pty.IPty }>();
-  private command: string;
 
   handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
@@ -38,11 +37,9 @@ export class TerminalGateway {
   ) {
     try {
       const { clientID: id, command } = payload;
-      this.command = command;
       let child: pty.IPty = this.terminal.get(id)?.process;
 
       if (!child) {
-        const bashPath = 'C:/Program Files/Git/bin/bash.exe';
         const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
         const args =
           shell === 'bash'
@@ -94,7 +91,7 @@ export class TerminalGateway {
       if (existingTerminal) {
         return;
       }
-      const bashPath = 'C:/Program Files/Git/bin/bash.exe';
+
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
       let unsentData = '';
       const args =

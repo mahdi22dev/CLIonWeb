@@ -30,8 +30,6 @@ const Xtrem = ({
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [currentCommand, setCurrentCommand] = useState<DataPayload>();
-  const isFirstCommand = useRef(true); // Ref to track the first command
   const commandHistory = useRef<string[]>([]);
   const prompt = () => {
     term.current?.write("\r\n");
@@ -57,35 +55,15 @@ const Xtrem = ({
 
   const handleCommand = (command: string) => {
     if (!term.current) return;
-
-    commandHistory.current = [...commandHistory.current, command];
+    // commandHistory.current = [...commandHistory.current, command];
     switch (command) {
       case "help":
         term.current.writeln("Available commands: help, clear, echo [text]");
         break;
-      case "clear":
-        isFirstCommand.current = true;
-        term.current.clear();
-        socket?.emit(
-          "createTerminal",
-          { id: clientID },
-          async (response: initPtyProps) => {
-            setInitPty(response);
-            initPty && prompt();
-          }
-        );
-        break;
       default:
-        // if (isFirstCommand.current) {
-        //   term.current?.clear();
-        // }
         if (command.length > 0) {
-          isFirstCommand.current = false;
-          console.log("command:", command);
-          const cmd = { id: clientID, data: command };
-          console.log("cmd:", cmd);
-          setCurrentCommand(cmd);
-          socket?.emit("executeCommand", { clientID, command });
+          const cmd = { clientID, command };
+          socket?.emit("executeCommand", cmd);
         }
     }
   };
@@ -136,9 +114,13 @@ const Xtrem = ({
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
       if (data === "\u001b[A") {
-        const lastCommand = commandHistory.current.length - 1;
-        console.log("last commnad", lastCommand);
-        term.current?.writeln(`${commandHistory.current[lastCommand]}`);
+        // const lastCommand = commandHistory.current.length - 1;
+        // console.log("last commnad", lastCommand);
+        // term.current?.writeln(`${commandHistory.current[lastCommand]}`);
+        console.log("arrow up clicked");
+
+        const cmd = { clientID, command: inputBuffer.current };
+        socket?.emit("executeCommand", cmd);
       } else if (data === "\u001b[B") {
         // Arrow Down
         term.current?.write("\r\n");
