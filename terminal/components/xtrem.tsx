@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Socket } from "socket.io-client";
 import { initPtyProps } from "@/lib/types";
+import { stripAnsi } from "@/lib/utils";
 
 interface TerminalProps {
   PROMPT?: string;
@@ -29,8 +30,10 @@ const Xtrem = ({
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const commandHistory = useRef<string[]>([]);
+  const commandHistory = useRef<string[]>(["pnpm root", "ls", "ipconfig"]);
+  const historyIndex = useRef<number>(-1);
+  const lastcommand = useRef<number>(0);
+
   const prompt = () => {
     term.current?.write("\r\n");
     term.current?.write(`${PROMPT}`);
@@ -55,26 +58,14 @@ const Xtrem = ({
 
   const handleCommand = (command: string) => {
     if (!term.current) return;
-    // commandHistory.current = [...commandHistory.current, command];
-    switch (command) {
-      case "help":
-        term.current.writeln("Available commands: help, clear, echo [text]");
-        break;
-      default:
-        if (command.length > 0) {
-          const cmd = { clientID, command };
-          socket?.emit("executeCommand", cmd);
-        }
+    commandHistory.current = [...commandHistory.current, command];
+    console.log(commandHistory.current);
+
+    if (command.length > 0) {
+      const cmd = { clientID, command };
+      socket?.emit("executeCommand", cmd);
     }
   };
-
-  // useEffect(() => {
-  //   console.log(historyIndex);
-  //   console.log(commandHistory.current.length);
-  //   if (historyIndex < commandHistory.current.length) {
-  //     console.log("command we set:", commandHistory.current[historyIndex - 1]);
-  //   }
-  // }, [commandHistory.current, historyIndex]);
 
   useEffect(() => {
     if (!socket) return;
@@ -114,13 +105,28 @@ const Xtrem = ({
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
       if (data === "\u001b[A") {
-        // const lastCommand = commandHistory.current.length - 1;
-        // console.log("last commnad", lastCommand);
-        // term.current?.writeln(`${commandHistory.current[lastCommand]}`);
-        console.log("arrow up clicked");
+        console.log("command history", commandHistory.current);
+        if (historyIndex.current < commandHistory.current.length - 1) {
+          historyIndex.current++;
+          const historyCmd =
+            commandHistory.current[
+              commandHistory.current.length - 1 - historyIndex.current
+            ];
 
-        const cmd = { clientID, command: inputBuffer.current };
-        socket?.emit("executeCommand", cmd);
+          const stripedPrompt = stripAnsi(PROMPT || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`); // Go to column 2 (after prompt)
+          term.current?.write("\x1b[K");
+
+          inputBuffer.current = historyCmd;
+          console.log(
+            "previous command ",
+            commandHistory.current[
+              commandHistory.current.length - 1 - historyIndex.current - 1
+            ]
+          );
+
+          term.current?.write(historyCmd);
+        }
       } else if (data === "\u001b[B") {
         // Arrow Down
         term.current?.write("\r\n");
@@ -128,14 +134,13 @@ const Xtrem = ({
       } else {
         // Handle ENTER key
         if (code === 13) {
-          // term.current?.write("\r\n"); // Move to new line
           handleCommand(inputBuffer.current);
           inputBuffer.current = "";
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {
             inputBuffer.current = inputBuffer.current.slice(0, -1);
-            term.current?.write("\b \b"); // Remove character visually
+            term.current?.write("\b \b");
           }
         } else {
           inputBuffer.current += data;

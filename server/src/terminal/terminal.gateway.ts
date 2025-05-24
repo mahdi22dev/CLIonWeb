@@ -64,6 +64,9 @@ export class TerminalGateway {
         });
 
         this.terminal.set(id, { clientID: id, process: child });
+        child.onData((data) => {
+          client.emit('commandOutput', { id, data });
+        });
       }
 
       if (child) {
@@ -72,6 +75,7 @@ export class TerminalGateway {
           this.terminal.delete(id);
         });
       }
+      console.log('excuted command: ', command);
 
       child.write(`${command}\r`);
     } catch (err) {
@@ -91,6 +95,10 @@ export class TerminalGateway {
       if (existingTerminal) {
         return;
       }
+
+      const HIGH = 100000;
+      const LOW = 10000;
+      let watermark = 0;
 
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
       let unsentData = '';
