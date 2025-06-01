@@ -30,9 +30,8 @@ const Xtrem = ({
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
-  const commandHistory = useRef<string[]>(["pnpm root", "ls", "ipconfig"]);
+  const commandHistory = useRef<string[]>([]);
   const historyIndex = useRef<number>(-1);
-  const lastcommand = useRef<number>(0);
 
   const prompt = () => {
     term.current?.write("\r\n");
@@ -105,7 +104,9 @@ const Xtrem = ({
       const code = data.charCodeAt(0);
       // Handle Arrow Keys
       if (data === "\u001b[A") {
-        console.log("command history", commandHistory.current);
+        // Up arrow
+        if (commandHistory.current.length === 0) return;
+
         if (historyIndex.current < commandHistory.current.length - 1) {
           historyIndex.current++;
           const historyCmd =
@@ -118,19 +119,33 @@ const Xtrem = ({
           term.current?.write("\x1b[K");
 
           inputBuffer.current = historyCmd;
-          console.log(
-            "previous command ",
-            commandHistory.current[
-              commandHistory.current.length - 1 - historyIndex.current - 1
-            ]
-          );
-
           term.current?.write(historyCmd);
         }
       } else if (data === "\u001b[B") {
-        // Arrow Down
-        term.current?.write("\r\n");
-        term.current?.writeln("You pressed Arrow Down");
+        // Down arrow
+        if (commandHistory.current.length === 0) return;
+
+        if (historyIndex.current > 0) {
+          historyIndex.current--;
+          const historyCmd =
+            commandHistory.current[
+              commandHistory.current.length - 1 - historyIndex.current
+            ];
+
+          const stripedPrompt = stripAnsi(PROMPT || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`);
+          term.current?.write("\x1b[K");
+
+          inputBuffer.current = historyCmd;
+          term.current?.write(historyCmd);
+        } else if (historyIndex.current === 0) {
+          // When we reach the most recent command (index 0), pressing down should clear the input
+          historyIndex.current = -1;
+          const stripedPrompt = stripAnsi(PROMPT || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`);
+          term.current?.write("\x1b[K");
+          inputBuffer.current = "";
+        }
       } else {
         // Handle ENTER key
         if (code === 13) {
