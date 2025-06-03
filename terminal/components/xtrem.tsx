@@ -1,18 +1,17 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { RefObject, useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Socket } from "socket.io-client";
 import { initPtyProps } from "@/lib/types";
-import { stripAnsi } from "@/lib/utils";
+import { extractPromptPrefix, stripAnsi } from "@/lib/utils";
 
 interface TerminalProps {
   PROMPT?: string;
   socket: Socket | undefined;
   clientID: number;
-  setInitPty: React.Dispatch<React.SetStateAction<initPtyProps | null>>;
-  initPty: initPtyProps | null;
+  initPty: RefObject<initPtyProps | null>;
 }
 
 interface DataPayload {
@@ -20,13 +19,7 @@ interface DataPayload {
   data: string;
 }
 
-const Xtrem = ({
-  PROMPT,
-  socket,
-  clientID,
-  setInitPty,
-  initPty,
-}: TerminalProps) => {
+const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const inputBuffer = useRef<string>("");
@@ -35,8 +28,12 @@ const Xtrem = ({
 
   const prompt = () => {
     term.current?.write("\r\n");
-    term.current?.write(`${PROMPT}`);
+    term.current?.write(`${initPty.current?.prompt}`);
   };
+
+  useEffect(() => {
+    console.log("PROMPT change to :", stripAnsi(initPty.current?.prompt || ""));
+  }, [initPty.current?.prompt]);
 
   useEffect(() => {
     if (!socket) return;
@@ -46,6 +43,29 @@ const Xtrem = ({
       term.current?.write("\r\n");
       if (data.data) {
         term.current?.write(data.data.toString());
+
+        const checkPromptLine = (line: string) => {
+          const expectedPrefix = extractPromptPrefix(
+            stripAnsi(initPty.current?.prompt || "")
+          );
+          const cleanLinePrefix = extractPromptPrefix(stripAnsi(line.trim()));
+          console.log("cleanLine:", expectedPrefix);
+          console.log("current prompt", cleanLinePrefix);
+
+          if (cleanLinePrefix == expectedPrefix) {
+            console.log("Prompt detected:", line.trim());
+
+            initPty.current = {
+              prompt: line.trim(),
+              id: data.id,
+              pid: initPty.current?.pid || 0,
+            };
+          }
+        };
+        const outputLines = data.data.toString().split("\n");
+        outputLines.forEach((line) => {
+          checkPromptLine(line);
+        });
       }
     });
 
@@ -113,9 +133,10 @@ const Xtrem = ({
             commandHistory.current[
               commandHistory.current.length - 1 - historyIndex.current
             ];
+          console.log("propmt :", initPty?.current?.prompt);
 
-          const stripedPrompt = stripAnsi(PROMPT || "");
-          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`); // Go to column 2 (after prompt)
+          const stripedPrompt = stripAnsi(initPty?.current?.prompt || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 2}G`); // Go to column 2 (after prompt)
           term.current?.write("\x1b[K");
 
           inputBuffer.current = historyCmd;
@@ -127,13 +148,14 @@ const Xtrem = ({
 
         if (historyIndex.current > 0) {
           historyIndex.current--;
+
           const historyCmd =
             commandHistory.current[
               commandHistory.current.length - 1 - historyIndex.current
             ];
 
-          const stripedPrompt = stripAnsi(PROMPT || "");
-          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`);
+          const stripedPrompt = stripAnsi(initPty.current?.prompt || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 2}G`);
           term.current?.write("\x1b[K");
 
           inputBuffer.current = historyCmd;
@@ -141,8 +163,9 @@ const Xtrem = ({
         } else if (historyIndex.current === 0) {
           // When we reach the most recent command (index 0), pressing down should clear the input
           historyIndex.current = -1;
-          const stripedPrompt = stripAnsi(PROMPT || "");
-          term.current?.write(`\x1b[${stripedPrompt.length + 1}G`);
+
+          const stripedPrompt = stripAnsi(initPty.current?.prompt || "");
+          term.current?.write(`\x1b[${stripedPrompt.length + 2}G`);
           term.current?.write("\x1b[K");
           inputBuffer.current = "";
         }

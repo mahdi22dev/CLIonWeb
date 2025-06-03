@@ -6,8 +6,21 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function stripAnsi(str: string): string {
-  return str
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "") // ESC [ ... commands
-    .replace(/\x1B\][^\x07]*\x07/g, "") // ESC ] ... BEL (title)
-    .replace(/\x1B[?][0-9]+[hl]/g, ""); // ESC ?2004h or similar
+  return (
+    str
+      // Remove OSC (Operating System Command) sequences (e.g., window title changes)
+      .replace(/\x1B\]\d+;[^\x07]*\x07/g, "")
+      // Remove CSI (Control Sequence Introducer) sequences (colors, cursor moves)
+      .replace(/\x1B\[[\d;]*[A-Za-z]/g, "")
+      // Remove private mode sequences (e.g., `?2004h`)
+      .replace(/\x1B\[\?[\d;]*[hl]/g, "")
+      // Remove any remaining escape sequences
+      .replace(/\x1B./g, "")
+      // Trim weird whitespace/control chars
+      .trim()
+  );
 }
+
+export const extractPromptPrefix = (prompt: string) => {
+  return prompt.split(":")[0];
+};
