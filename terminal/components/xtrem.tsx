@@ -3,6 +3,8 @@ import React, { RefObject, useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "xterm-addon-web-links";
+import { SearchAddon } from "xterm-addon-search";
 import { Socket } from "socket.io-client";
 import { initPtyProps } from "@/lib/types";
 import { extractPromptPrefix, stripAnsi } from "@/lib/utils";
@@ -84,6 +86,8 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
     if (!socket) return;
     if (!terminalRef.current) return;
     const fitAddon = new FitAddon();
+    const webLinksAddon = new WebLinksAddon();
+    const searchAddon = new SearchAddon();
 
     term.current = new Terminal({
       cursorBlink: true,
@@ -112,7 +116,13 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
     term.current.loadAddon(fitAddon);
     term.current.open(terminalRef.current);
     fitAddon.fit();
-
+    term.current.loadAddon(webLinksAddon);
+    term.current.loadAddon(searchAddon);
+    term.current.writeln("Welcome to CLIonWeb");
+    term.current.writeln("Github: https://github.com/mahdi22dev/CLIonWeb");
+    setTimeout(() => {
+      searchAddon.findNext("CLIonWeb");
+    }, 100);
     prompt();
     term.current?.onData((data) => {
       const code = data.charCodeAt(0);
@@ -167,7 +177,7 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
         // Handle ENTER key
         if (code === 13) {
           handleCommand(inputBuffer.current);
-
+          inputBuffer.current = "";
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {
