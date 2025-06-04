@@ -32,10 +32,6 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
   };
 
   useEffect(() => {
-    console.log("PROMPT change to :", stripAnsi(initPty.current?.prompt || ""));
-  }, [initPty.current?.prompt]);
-
-  useEffect(() => {
     if (!socket) return;
     if (!term.current) return;
 
@@ -49,12 +45,8 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
             stripAnsi(initPty.current?.prompt || "")
           );
           const cleanLinePrefix = extractPromptPrefix(stripAnsi(line.trim()));
-          console.log("cleanLine:", expectedPrefix);
-          console.log("current prompt", cleanLinePrefix);
 
           if (cleanLinePrefix == expectedPrefix) {
-            console.log("Prompt detected:", line.trim());
-
             initPty.current = {
               prompt: line.trim(),
               id: data.id,
@@ -77,13 +69,15 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
 
   const handleCommand = (command: string) => {
     if (!term.current) return;
-    commandHistory.current = [...commandHistory.current, command];
-    console.log(commandHistory.current);
+    if (command.length > 0) {
+      commandHistory.current = [...commandHistory.current, command];
+    }
 
     if (command.length > 0) {
       const cmd = { clientID, command };
       socket?.emit("executeCommand", cmd);
     }
+    console.log("Commands:", commandHistory.current);
   };
 
   useEffect(() => {
@@ -133,10 +127,9 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
             commandHistory.current[
               commandHistory.current.length - 1 - historyIndex.current
             ];
-          console.log("propmt :", initPty?.current?.prompt);
 
           const stripedPrompt = stripAnsi(initPty?.current?.prompt || "");
-          term.current?.write(`\x1b[${stripedPrompt.length + 2}G`); // Go to column 2 (after prompt)
+          term.current?.write(`\x1b[${stripedPrompt.length + 2}G`);
           term.current?.write("\x1b[K");
 
           inputBuffer.current = historyCmd;
@@ -161,19 +154,20 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
           inputBuffer.current = historyCmd;
           term.current?.write(historyCmd);
         } else if (historyIndex.current === 0) {
-          // When we reach the most recent command (index 0), pressing down should clear the input
           historyIndex.current = -1;
-
           const stripedPrompt = stripAnsi(initPty.current?.prompt || "");
           term.current?.write(`\x1b[${stripedPrompt.length + 2}G`);
           term.current?.write("\x1b[K");
           inputBuffer.current = "";
         }
+      } else if (data === "\x03") {
+        handleCommand("\x03");
+        inputBuffer.current = "";
       } else {
         // Handle ENTER key
         if (code === 13) {
           handleCommand(inputBuffer.current);
-          inputBuffer.current = "";
+
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {

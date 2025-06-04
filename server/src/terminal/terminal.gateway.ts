@@ -96,10 +96,6 @@ export class TerminalGateway {
         return;
       }
 
-      const HIGH = 100000;
-      const LOW = 10000;
-      let watermark = 0;
-
       const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
       let unsentData = '';
       const args =
@@ -145,6 +141,51 @@ export class TerminalGateway {
     } catch (err) {
       console.error('WebSocket Error:', err);
       client.emit('error', { message: 'Failed to create a terminal' });
+    }
+  }
+
+  @SubscribeMessage('killTerminal')
+  async handleProccesSIGINT(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { id: number },
+  ) {
+    try {
+      const { id } = payload;
+      const existingTerminal = this.terminal.get(id);
+      if (existingTerminal) {
+        existingTerminal.process.kill('SIGINT');
+        const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+        const args =
+          shell === 'bash'
+            ? ['-c', 'stty -echo; exec bash']
+            : [
+                '-NoLogo',
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-Command',
+                '-',
+              ];
+
+        const child = pty?.spawn(shell, args, {
+          name: 'xterm-256color',
+          cols: 80,
+          rows: 30,
+          cwd: process.env.HOME,
+          env: {
+            ...process.env,
+            TERM: 'xterm-256color',
+          },
+        });
+        child && this.terminal.set(id, { clientID: id, process: child });
+        console.log('killing terminal');
+      } else {
+        console.log('terminal not found');
+        return;
+      }
+    } catch (err) {
+      console.error('WebSocket Error:', err);
+      client.emit('error', { message: 'Failed to kill a terminal' });
     }
   }
 }
