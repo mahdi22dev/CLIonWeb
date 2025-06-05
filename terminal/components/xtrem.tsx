@@ -27,6 +27,7 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
   const inputBuffer = useRef<string>("");
   const commandHistory = useRef<string[]>([]);
   const historyIndex = useRef<number>(-1);
+  const masked = useRef<boolean>(false);
 
   const prompt = () => {
     term.current?.write("\r\n");
@@ -60,6 +61,9 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
         outputLines.forEach((line) => {
           checkPromptLine(line);
         });
+        if (data.data.includes("[sudo] password ")) {
+          masked.current = true;
+        }
       }
     });
 
@@ -71,7 +75,7 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
 
   const handleCommand = (command: string) => {
     if (!term.current) return;
-    if (command.length > 0) {
+    if (command.length > 0 && masked.current === false) {
       commandHistory.current = [...commandHistory.current, command];
     }
 
@@ -178,6 +182,7 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
         if (code === 13) {
           handleCommand(inputBuffer.current);
           inputBuffer.current = "";
+          masked.current = false;
           // Handle BACKSPACE
         } else if (code === 127) {
           if (inputBuffer.current.length > 0) {
@@ -185,8 +190,13 @@ const Xtrem = ({ PROMPT, socket, clientID, initPty }: TerminalProps) => {
             term.current?.write("\b \b");
           }
         } else {
-          inputBuffer.current += data;
-          term.current?.write(data);
+          if (masked.current) {
+            inputBuffer.current += data;
+            term.current?.write("*");
+          } else {
+            inputBuffer.current += data;
+            term.current?.write(data);
+          }
         }
       }
     });
