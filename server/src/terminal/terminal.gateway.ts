@@ -49,8 +49,6 @@ export class TerminalGateway {
                 '-NoProfile', // Prevents loading user profile (faster + cleaner)
                 '-ExecutionPolicy',
                 'Bypass', // Bypass script restrictions (safe in sandbox)
-                '-Command',
-                '-', // Accept commands via stdin (interactive)
               ];
         child = pty?.spawn(shell, args, {
           name: 'xterm-256color',
@@ -101,14 +99,7 @@ export class TerminalGateway {
       const args =
         shell === 'bash'
           ? ['-c', 'stty -echo; exec bash']
-          : [
-              '-NoLogo',
-              '-NoProfile',
-              '-ExecutionPolicy',
-              'Bypass',
-              '-Command',
-              '-',
-            ];
+          : ['-nologo', '-ExecutionPolicy', 'Bypass'];
 
       const child = pty?.spawn(shell, args, {
         name: 'xterm-256color',
@@ -120,6 +111,7 @@ export class TerminalGateway {
           TERM: 'xterm-256color',
         },
       });
+
       child && this.terminal.set(id, { clientID: id, process: child });
 
       child.onData((data) => {
